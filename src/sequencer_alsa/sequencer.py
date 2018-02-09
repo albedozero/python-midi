@@ -262,11 +262,23 @@ class Sequencer(object):
             seqev.type = S.SND_SEQ_EVENT_PGMCHANGE
             seqev.data.control.channel = event.channel
             seqev.data.control.value = event.value
-        ## Pitch Bench
+        ## Pitch Bend
         elif isinstance(event, midi.PitchWheelEvent):
             seqev.type = S.SND_SEQ_EVENT_PITCHBEND
             seqev.data.control.channel = event.channel
             seqev.data.control.value = event.pitch
+		## aftertouch too
+		## Key Pressure
+        elif isinstance(event, midi.AfterTouchEvent):
+            seqev.type = S.SND_SEQ_EVENT_KEYPRESS
+            seqev.data.control.channel = event.channel
+            seqev.data.control.value = event.value
+            seqev.data.control.note = event.pitch
+		## Channel Pressure
+        elif isinstance(event, midi.ChannelAfterTouchEvent):
+            seqev.type = S.SND_SEQ_EVENT_CHANPRESS
+            seqev.data.control.channel = event.channel
+            seqev.data.control.value = event.value
         ## Unknown
         else:
             print "Warning :: Unknown event type: %s" % event
@@ -280,26 +292,48 @@ class Sequencer(object):
     def event_read(self):
         ev = S.event_input(self.client)
         if ev and (ev < 0): self._error(ev)
-        if ev and ev.type in (S.SND_SEQ_EVENT_NOTEON, S.SND_SEQ_EVENT_NOTEOFF):
-            if ev.type == S.SND_SEQ_EVENT_NOTEON:
-                mev = midi.NoteOnEvent()
-                mev.channel = ev.data.note.channel
-                mev.pitch = ev.data.note.note
-                mev.velocity = ev.data.note.velocity
-            elif ev.type == S.SND_SEQ_EVENT_NOTEOFF:
-                mev = midi.NoteOffEvent()
-                mev.channel = ev.data.note.channel
-                mev.pitch = ev.data.note.note
-                mev.velocity = ev.data.note.velocity
-            if ev.time.time.tv_nsec:
-                # convert to ms
-                mev.msdeay = \
-                    (ev.time.time.tv_nsec / 1e6) + (ev.time.time.tv_sec * 1e3)
-            else:
-                mev.tick = ev.time.tick
-            return mev
-        else:
-            return None
+		if ev.type == S.SND_SEQ_EVENT_NOTEON:
+			mev = midi.NoteOnEvent()
+			mev.channel = ev.data.note.channel
+			mev.pitch = ev.data.note.note
+			mev.velocity = ev.data.note.velocity
+		elif ev.type == S.SND_SEQ_EVENT_NOTEOFF:
+			mev = midi.NoteOffEvent()
+			mev.channel = ev.data.note.channel
+			mev.pitch = ev.data.note.note
+			mev.velocity = ev.data.note.velocity
+		## add cc, prog, pb, aftertouch events
+		elif ev.type == S.SND_SEQ_EVENT_CONTROLLER:
+			mev = midi.ControlChangeEvent()
+			mev.channel = ev.data.control.channel
+			mev.control = ev.data.control.param
+			mev.value = ev.data.control.value
+		elif ev.type == S.SND_SEQ_EVENT_PGMCHANGE:
+			mev = midi.ProgramChangeEvent()
+			mev.channel = ev.data.control.channel
+			mev.value = ev.data.control.value
+		elif ev.type == S.SND_SEQ_EVENT_PITCHBEND:
+			mev = midi.PitchWheelEvent()
+			mev.channel = ev.data.control.channel
+			mev.pitch = ev.data.control.value
+		elif ev.type == S.SND_SEQ_EVENT_KEYPRESS:
+			mev = midi.AfterTouchEvent()
+			mev.channel = ev.data.control.channel
+			mev.value = ev.data.control.value
+			mev.pitch = ev.data.control.note
+		elif ev.type == S.SND_SEQ_EVENT_CHANPRESS:
+			mev = midi.ChannelAfterTouchEvent()
+			mev.channel = ev.data.control.channel
+			mev.value = ev.data.control.value
+		else:
+			return None
+		if ev.time.time.tv_nsec:
+			# convert to ms
+			mev.msdeay = \
+				(ev.time.time.tv_nsec / 1e6) + (ev.time.time.tv_sec * 1e3)
+		else:
+			mev.tick = ev.time.tick
+		return mev
 
 class SequencerHardware(Sequencer):
     SequencerName = "__hw__"
